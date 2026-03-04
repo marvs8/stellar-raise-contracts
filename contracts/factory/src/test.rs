@@ -4,6 +4,7 @@ use soroban_sdk::{testutils::Address as _, token, Address, Env};
 extern crate std;
 
 // Import the crowdfund contract WASM.
+#[allow(clippy::too_many_arguments)]
 mod crowdfund_wasm {
     soroban_sdk::contractimport!(file = "../../target/wasm32v1-none/release/crowdfund.wasm");
 }

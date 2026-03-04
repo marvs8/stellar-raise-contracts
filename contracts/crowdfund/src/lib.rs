@@ -11,6 +11,7 @@ use soroban_sdk::{
 mod test;
 
 const CONTRACT_VERSION: u32 = 3;
+#[allow(dead_code)]
 const CONTRIBUTION_COOLDOWN: u64 = 60; // 60 seconds cooldown
 
 // ── Data Types ──────────────────────────────────────────────────────────────
@@ -131,7 +132,7 @@ impl CrowdfundContract {
     /// * If platform fee exceeds 10,000 (100%).
     pub fn initialize(
         env: Env,
-        admin: Address,
+        _admin: Address,
         creator: Address,
         token: Address,
         goal: i128,
@@ -156,22 +157,11 @@ impl CrowdfundContract {
                 .set(&DataKey::PlatformConfig, config);
         }
 
-        let hard_cap_value = hard_cap.unwrap_or(goal * 2); // Default to 2x goal
-        if hard_cap_value < goal {
-            return Err(ContractError::InvalidHardCap);
-        }
-
         if let Some(bg) = bonus_goal {
             if bg <= goal {
                 panic!("bonus goal must be greater than primary goal");
             }
             env.storage().instance().set(&DataKey::BonusGoal, &bg);
-        }
-
-        if let Some(bg_description) = bonus_goal_description {
-            env.storage()
-                .instance()
-                .set(&DataKey::BonusGoalDescription, &bg_description);
         }
 
         if let Some(bg) = bonus_goal {
@@ -200,9 +190,6 @@ impl CrowdfundContract {
         }
 
         env.storage().instance().set(&DataKey::Goal, &goal);
-        env.storage()
-            .instance()
-            .set(&DataKey::HardCap, &hard_cap_value);
         env.storage().instance().set(&DataKey::Deadline, &deadline);
         env.storage()
             .instance()
@@ -261,7 +248,6 @@ impl CrowdfundContract {
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
         let token_client = token::Client::new(&env, &token_address);
-        token_client.transfer(&contributor, &env.current_contract_address(), &amount);
 
         // Transfer tokens from the contributor to this contract.
         token_client.transfer(&contributor, &env.current_contract_address(), &amount);
@@ -274,11 +260,11 @@ impl CrowdfundContract {
             .get(&contribution_key)
             .unwrap_or(0);
 
-        let new_contribution = prev.checked_add(amount).ok_or(ContractError::Overflow)?;
+        let new_contribution = previous_amount.checked_add(amount).ok_or(ContractError::Overflow)?;
 
         env.storage()
             .persistent()
-            .set(&contribution_key, &(previous_amount + amount));
+            .set(&contribution_key, &new_contribution);
         env.storage()
             .persistent()
             .extend_ttl(&contribution_key, 100, 100);
@@ -313,7 +299,7 @@ impl CrowdfundContract {
             .unwrap_or_else(|| Vec::new(&env));
 
         if !contributors.contains(&contributor) {
-            contributors.push_back(contributor);
+            contributors.push_back(contributor.clone());
             env.storage()
                 .persistent()
                 .set(&DataKey::Contributors, &contributors);
@@ -327,20 +313,6 @@ impl CrowdfundContract {
             .publish(("campaign", "contributed"), (contributor, amount));
 
         Ok(())
-    }
-
-    /// Sets the NFT contract address used for reward minting.
-    ///
-    /// Only the campaign creator can configure this value.
-    pub fn set_nft_contract(env: Env, creator: Address, nft_contract: Address) {
-        let stored_creator: Address = env.storage().instance().get(&DataKey::Creator).unwrap();
-        if creator != stored_creator {
-            panic!("not authorized");
-        }
-        creator.require_auth();
-        env.storage()
-            .instance()
-            .set(&DataKey::NFTContract, &nft_contract);
     }
 
     /// Sets the NFT contract address used for reward minting.
@@ -648,9 +620,9 @@ impl CrowdfundContract {
         creator.require_auth();
 
         let token_address: Address = env.storage().instance().get(&DataKey::Token).unwrap();
-        let token_client = token::Client::new(&env, &token_address);
+        let _token_client = token::Client::new(&env, &token_address);
 
-        let contributors: Vec<Address> = env
+        let _contributors: Vec<Address> = env
             .storage()
             .persistent()
             .get(&DataKey::Contributors)
@@ -725,13 +697,19 @@ impl CrowdfundContract {
             updated_fields.push_back(Symbol::new(&env, "description"));
         }
 
-        if total - amount == 0 {
+        // Update social links if provided.
+        if let Some(new_socials) = socials {
             env.storage()
                 .instance()
-                .set(&DataKey::Status, &Status::Refunded);
+                .set(&DataKey::SocialLinks, &new_socials);
+            updated_fields.push_back(Symbol::new(&env, "socials"));
         }
 
-        Ok(())
+        // Emit event with updated fields.
+        env.events().publish(
+            (Symbol::new(&env, "metadata_updated"), creator.clone()),
+            updated_fields,
+        );
     }
 
     pub fn add_roadmap_item(env: Env, date: u64, description: String) {
