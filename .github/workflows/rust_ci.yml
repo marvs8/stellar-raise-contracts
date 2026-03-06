@@ -63,6 +63,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      - name: Build crowdfund WASM for tests
+        run: cargo build --release --target wasm32-unknown-unknown -p crowdfund
+
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
