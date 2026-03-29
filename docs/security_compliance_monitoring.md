@@ -1,111 +1,79 @@
-# security_compliance_monitoring
-
-Continuous CI/CD compliance oversight for the Stellar Raise crowdfunding contract.
+# Security Compliance Monitoring for CI/CD
 
 ## Overview
 
-`security_compliance_monitoring.sh` monitors the repository for ongoing compliance signals:
-dependency freshness, secret leakage, file integrity, and CI workflow health.
-It complements the auditing script by focusing on *continuous* oversight rather than
-point-in-time deep audits.
+Automated security compliance monitoring system that tracks and reports on security metrics throughout the CI/CD pipeline.
 
-## Monitor Phases
+## Features
 
-| Phase | Name | What it checks |
-|-------|------|----------------|
-| 1 | Tool Presence | `cargo`, `git` are installed |
-| 2 | Required File Presence | `Cargo.toml`, `README.md`, `SECURITY.md`, `LICENSE`, CI workflows |
-| 3 | Secret Leakage Scan | Scans tracked files for `PRIVATE_KEY`, `SECRET_KEY`, `password =`, etc. |
-| 4 | `.gitignore` Compliance | `.soroban/`, `target/`, report dirs are ignored |
-| 5 | CI Workflow Health | `cargo audit`, `cargo clippy`, `cargo test`, `cargo fmt`, `timeout-minutes` present |
-| 6 | Dependency Freshness | `Cargo.lock` exists; `cargo audit` reports no vulnerabilities |
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | All monitors passed |
-| `1` | One or more monitors failed |
-| `2` | Required tooling is missing |
+- **Dependency Vulnerability Scanning**: Detects vulnerable dependencies using `cargo-audit`
+- **Code Pattern Analysis**: Identifies unsafe code blocks and security anti-patterns
+- **Test Coverage Monitoring**: Tracks test coverage against 95% target
+- **CI Security Validation**: Verifies security workflow configuration
 
 ## Usage
 
 ```bash
-# Basic run
 ./scripts/security_compliance_monitoring.sh
-
-# Verbose output
-./scripts/security_compliance_monitoring.sh --verbose
-
-# Write JSON report
-./scripts/security_compliance_monitoring.sh --json --report-dir monitoring-reports
-
-# Help
-./scripts/security_compliance_monitoring.sh --help
 ```
 
-## Security Assumptions
+## Report Output
 
-1. **Read-only** — The script never writes to source files or contract storage.
-2. **Permissionless** — No privileged credentials are required.
-3. **Deterministic** — Same repository state → same result.
-4. **Bounded** — All iterations are over fixed-size constant arrays.
-
-## Secret Patterns Scanned
-
-The following patterns are checked across all git-tracked source files:
-
-- `PRIVATE_KEY`
-- `SECRET_KEY`
-- `-----BEGIN.*PRIVATE`
-- `sk_live_`
-- `sk_test_`
-- `password\s*=`
-- `api_key\s*=`
-
-To add new patterns, extend the `SECRET_PATTERNS` array in the script.
-
-## JSON Report Format
+Reports are generated in `.security-reports/` directory with timestamp:
 
 ```json
 {
-  "script": "security_compliance_monitoring",
-  "version": "1.0.0",
-  "timestamp": "2026-03-29T05:46:48Z",
-  "status": "PASS",
-  "summary": {
-    "total": 6,
-    "passed": 6,
-    "failed": 0,
-    "warnings": 0
+  "timestamp": "2026-03-29T04:52:08Z",
+  "checks": {
+    "dependencies": {
+      "status": "PASS",
+      "details": "No vulnerable dependencies"
+    },
+    "code_patterns": {
+      "status": "WARN",
+      "details": "Found 2 unsafe blocks"
+    },
+    "test_coverage": {
+      "status": "PASS",
+      "details": "Coverage: 96.5%"
+    },
+    "ci_security": {
+      "status": "PASS",
+      "details": "Security workflow configured"
+    }
   }
 }
 ```
 
-## CI Integration
+## Status Values
+
+- **PASS**: Check passed all requirements
+- **FAIL**: Check failed - requires immediate attention
+- **WARN**: Check passed with warnings - review recommended
+- **SKIP**: Check skipped - tool not available
+
+## Integration with CI/CD
+
+Add to `.github/workflows/security.yml`:
 
 ```yaml
-- name: Make monitoring script executable
-  run: chmod +x scripts/security_compliance_monitoring.sh
-
-- name: Run security compliance monitoring
-  run: ./scripts/security_compliance_monitoring.sh --json --report-dir monitoring-reports
-
-- name: Upload monitoring report
-  if: always()
-  uses: actions/upload-artifact@v4
-  with:
-    name: monitoring-report
-    path: monitoring-reports/
+- name: Run Security Compliance Monitoring
+  run: ./scripts/security_compliance_monitoring.sh
 ```
 
-## Running Tests
+## Requirements
 
-```bash
-chmod +x scripts/security_compliance_monitoring.test.sh
-./scripts/security_compliance_monitoring.test.sh
-# or with verbose output:
-./scripts/security_compliance_monitoring.test.sh --verbose
-```
+- `cargo-audit` (optional, for dependency scanning)
+- `cargo-tarpaulin` (optional, for coverage analysis)
+- `jq` (for JSON report generation)
 
-Test coverage target: ≥ 95 % of all monitorable code paths.
+## Exit Codes
+
+- `0`: All checks passed
+- `1`: One or more checks failed
+
+## Security Assumptions
+
+- Reports are stored securely with restricted access
+- Timestamps use UTC for consistency
+- All external tools are verified before execution

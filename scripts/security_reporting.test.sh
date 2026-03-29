@@ -1,18 +1,20 @@
 #!/bin/bash
 
-# Tests for security_compliance_monitoring.sh
+# Tests for security_reporting.sh
 
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPT_UNDER_TEST="${SCRIPT_DIR}/security_compliance_monitoring.sh"
-TEST_REPORT_DIR="/tmp/security_compliance_test_$$"
+SCRIPT_UNDER_TEST="${SCRIPT_DIR}/security_reporting.sh"
+TEST_REPORT_DIR="/tmp/security_reporting_test_$$"
 
 # Setup
 setup() {
   mkdir -p "$TEST_REPORT_DIR/contracts"
   mkdir -p "$TEST_REPORT_DIR/.github/workflows"
   touch "$TEST_REPORT_DIR/.github/workflows/security.yml"
+  touch "$TEST_REPORT_DIR/SECURITY.md"
+  touch "$TEST_REPORT_DIR/CODE_OF_CONDUCT.md"
 }
 
 # Cleanup
@@ -26,7 +28,7 @@ test_report_creation() {
   
   (cd "$TEST_REPORT_DIR" && PROJECT_ROOT="$TEST_REPORT_DIR" bash "$SCRIPT_UNDER_TEST") > /dev/null 2>&1 || true
   
-  local report_count=$(find "$TEST_REPORT_DIR/.security-reports" -name "compliance_*.json" 2>/dev/null | wc -l)
+  local report_count=$(find "$TEST_REPORT_DIR/.security-reports" -name "security_report_*.json" 2>/dev/null | wc -l)
   if [ "$report_count" -gt 0 ]; then
     echo "✓ PASS: Report file created"
     return 0
@@ -42,13 +44,13 @@ test_report_structure() {
   
   (cd "$TEST_REPORT_DIR" && PROJECT_ROOT="$TEST_REPORT_DIR" bash "$SCRIPT_UNDER_TEST") > /dev/null 2>&1 || true
   
-  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "compliance_*.json" 2>/dev/null | head -1)
+  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "security_report_*.json" 2>/dev/null | head -1)
   if [ -z "$report_file" ]; then
     echo "✗ FAIL: No report file found"
     return 1
   fi
   
-  if jq -e '.timestamp and .checks' "$report_file" > /dev/null 2>&1; then
+  if jq -e '.timestamp and .report_type and .sections' "$report_file" > /dev/null 2>&1; then
     echo "✓ PASS: Report has valid JSON structure"
     return 0
   else
@@ -57,24 +59,24 @@ test_report_structure() {
   fi
 }
 
-# Test 3: Check results present
-test_check_results() {
-  echo "Test 3: Check results present..."
+# Test 3: All sections present
+test_sections_present() {
+  echo "Test 3: All sections present..."
   
   (cd "$TEST_REPORT_DIR" && PROJECT_ROOT="$TEST_REPORT_DIR" bash "$SCRIPT_UNDER_TEST") > /dev/null 2>&1 || true
   
-  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "compliance_*.json" 2>/dev/null | head -1)
+  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "security_report_*.json" 2>/dev/null | head -1)
   if [ -z "$report_file" ]; then
     echo "✗ FAIL: No report file found"
     return 1
   fi
   
-  local checks=$(jq '.checks | keys | length' "$report_file")
-  if [ "$checks" -ge 4 ]; then
-    echo "✓ PASS: All checks present ($checks checks)"
+  local sections=$(jq '.sections | keys | length' "$report_file")
+  if [ "$sections" -ge 5 ]; then
+    echo "✓ PASS: All sections present ($sections sections)"
     return 0
   else
-    echo "✗ FAIL: Missing checks (found $checks, expected 4)"
+    echo "✗ FAIL: Missing sections (found $sections, expected 5)"
     return 1
   fi
 }
@@ -85,13 +87,13 @@ test_status_values() {
   
   (cd "$TEST_REPORT_DIR" && PROJECT_ROOT="$TEST_REPORT_DIR" bash "$SCRIPT_UNDER_TEST") > /dev/null 2>&1 || true
   
-  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "compliance_*.json" 2>/dev/null | head -1)
+  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "security_report_*.json" 2>/dev/null | head -1)
   if [ -z "$report_file" ]; then
     echo "✗ FAIL: No report file found"
     return 1
   fi
   
-  local statuses=$(jq -r '.checks[].status' "$report_file" | sort -u)
+  local statuses=$(jq -r '.sections[].status' "$report_file" | sort -u)
   local valid=true
   
   while IFS= read -r status; do
@@ -116,7 +118,7 @@ test_timestamp_format() {
   
   (cd "$TEST_REPORT_DIR" && PROJECT_ROOT="$TEST_REPORT_DIR" bash "$SCRIPT_UNDER_TEST") > /dev/null 2>&1 || true
   
-  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "compliance_*.json" 2>/dev/null | head -1)
+  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "security_report_*.json" 2>/dev/null | head -1)
   if [ -z "$report_file" ]; then
     echo "✗ FAIL: No report file found"
     return 1
@@ -132,26 +134,24 @@ test_timestamp_format() {
   fi
 }
 
-# Test 6: Details field present
-test_details_field() {
-  echo "Test 6: Details field present..."
+# Test 6: Report type field
+test_report_type() {
+  echo "Test 6: Report type field..."
   
   (cd "$TEST_REPORT_DIR" && PROJECT_ROOT="$TEST_REPORT_DIR" bash "$SCRIPT_UNDER_TEST") > /dev/null 2>&1 || true
   
-  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "compliance_*.json" 2>/dev/null | head -1)
+  local report_file=$(find "$TEST_REPORT_DIR/.security-reports" -name "security_report_*.json" 2>/dev/null | head -1)
   if [ -z "$report_file" ]; then
     echo "✗ FAIL: No report file found"
     return 1
   fi
   
-  local details_count=$(jq '.checks | map(select(.details != null)) | length' "$report_file")
-  local total_checks=$(jq '.checks | length' "$report_file")
-  
-  if [ "$details_count" -eq "$total_checks" ]; then
-    echo "✓ PASS: All checks have details"
+  local report_type=$(jq -r '.report_type' "$report_file")
+  if [ "$report_type" = "security_report" ]; then
+    echo "✓ PASS: Report type is correct"
     return 0
   else
-    echo "✗ FAIL: Some checks missing details ($details_count/$total_checks)"
+    echo "✗ FAIL: Invalid report type: $report_type"
     return 1
   fi
 }
@@ -165,10 +165,10 @@ main() {
   
   test_report_creation && ((passed++)) || ((failed++))
   test_report_structure && ((passed++)) || ((failed++))
-  test_check_results && ((passed++)) || ((failed++))
+  test_sections_present && ((passed++)) || ((failed++))
   test_status_values && ((passed++)) || ((failed++))
   test_timestamp_format && ((passed++)) || ((failed++))
-  test_details_field && ((passed++)) || ((failed++))
+  test_report_type && ((passed++)) || ((failed++))
   
   teardown
   
