@@ -59,11 +59,6 @@ pub mod cross_rollup_communication;
 #[path = "cross_rollup_communication_test.rs"]
 mod cross_rollup_communication_test;
 
-pub mod security_baseline_scanning;
-#[cfg(test)]
-#[path = "security_baseline_scanning_test.rs"]
-mod security_baseline_scanning_test;
-
 #[cfg(test)]
 mod access_control_tests;
 #[cfg(test)]
@@ -1373,19 +1368,5 @@ impl CrowdfundContract {
     /// Returns `true` if `contract_address` is in the trusted allowlist.
     pub fn is_trusted_contract(env: Env, contract_address: Address) -> bool {
         cross_rollup_communication::is_trusted(&env, &contract_address)
-    }
-
-    // ── Security baseline scanning ───────────────────────────────────────────
-
-    /// Run all security baseline checks against the current contract state.
-    ///
-    /// Read-only — does not mutate any state. Returns `Ok(())` when all
-    /// invariants hold, or the first `ScanError` found.
-    ///
-    /// @notice Callable by anyone; no auth required.
-    pub fn security_scan(
-        env: Env,
-    ) -> Result<(), security_baseline_scanning::ScanError> {
-        security_baseline_scanning::run_baseline_scan(&env)
     }
 }
